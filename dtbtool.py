@@ -83,7 +83,7 @@ class Chip(object):
 
 def get_dts_data(filename, args):
     """Converts dtb to dts"""
-    cmdline = args.dtc_path + 'dtc -I dtb -O dts ' + filename
+    cmdline = f'{args.dtc_path}dtc -I dtb -O dts {filename}'
     return subprocess.check_output(cmdline, shell=True)
 
 def get_version_info(filename, args):
@@ -98,7 +98,7 @@ def get_version_info(filename, args):
     elif QCDT_BOARD_TAG in dts:
         version = 2
 
-    print("Version: %s" % version)
+    print(f"Version: {version}")
     return version
 
 def get_chip_data(line, sublen):
@@ -110,7 +110,7 @@ def get_chip_data(line, sublen):
     retlist = []
 
     # Given a line extract the content between "<" and ">"
-    str_data = re.search('<(.+?)>', line.strip()).group(1)
+    str_data = re.search('<(.+?)>', line.strip())[1]
 
     # Create an array of values delimited by a whitespace
     data = str_data.split()
@@ -165,7 +165,7 @@ def get_chip_info(filename, msmversion, args):
     if msmversion == 1:
 
         if not cpr_data:
-            print("... skip, incorrect '%s' format" % args.dt_tag)
+            print(f"... skip, incorrect '{args.dt_tag}' format")
             return None
 
         for cpr in cpr_data:
@@ -176,15 +176,15 @@ def get_chip_info(filename, msmversion, args):
 
 
     if not cr_data:
-        print("... skip, incorrect '%s' format" % args.dt_tag)
+        print(f"... skip, incorrect '{args.dt_tag}' format")
         return None
 
     if not ps_data:
-        print("... skip, incorrect '%s' format" % QCDT_BOARD_TAG)
+        print(f"... skip, incorrect '{QCDT_BOARD_TAG}' format")
         return None
 
     if not pmic_data and msmversion == 3:
-        print("... skip, incorrect '%s' format" % QCDT_PMIC_TAG)
+        print(f"... skip, incorrect '{QCDT_PMIC_TAG}' format")
         return None
 
     # Combine chipset, revision, platform, subtype and
@@ -232,12 +232,12 @@ def find_dtb(path, args):
     for entry in os.listdir(path):
         entry_path = os.path.join(path, entry)
         if os.path.isdir(entry_path):
-            print("Searching subdir: %s ..." % entry_path)
+            print(f"Searching subdir: {entry_path} ...")
             dtb_count += find_dtb(entry_path, args)
         else:
             ext = os.path.splitext(entry)
             if ext[1] == ".dtb":
-                print("Found file: %s ..." % entry)
+                print(f"Found file: {entry} ...")
                 dtb_count += process_dtb(entry_path, entry, args)
 
     return dtb_count
@@ -251,24 +251,20 @@ def process_dtb(entry_path, filename, args):
 
     # Identify the version number
     msmversion = get_version_info(entry_path, args)
-    if _dt_version < msmversion:
-        _dt_version = msmversion
-
+    _dt_version = max(_dt_version, msmversion)
     chiplist = get_chip_info(entry_path, msmversion, args)
 
-    if msmversion == 1:
-        if not chiplist:
-            print("skip, failed to scan for %s tag" % args.dt_tag)
-            return
-    if msmversion == 2:
-        if not chiplist:
-            print("skip, failed to scan for %s or %s tag" % (args.dt_tag, QCDT_BOARD_TAG))
-            return
-    if msmversion == 3:
-        if not chiplist:
-            print("skip, failed to scan for %s, %s or %s tag" %
-                  (args.dt_tag, QCDT_BOARD_TAG, QCDT_PMIC_TAG))
-            return
+    if msmversion == 1 and not chiplist:
+        print(f"skip, failed to scan for {args.dt_tag} tag")
+        return
+    if msmversion == 2 and not chiplist:
+        print(f"skip, failed to scan for {args.dt_tag} or {QCDT_BOARD_TAG} tag")
+        return
+    if msmversion == 3 and not chiplist:
+        print(
+            f"skip, failed to scan for {args.dt_tag}, {QCDT_BOARD_TAG} or {QCDT_PMIC_TAG} tag"
+        )
+        return
 
     # Retrieve dtb size
     size = os.stat(entry_path).st_size
@@ -302,8 +298,7 @@ def process_dtb(entry_path, filename, args):
 
 def parse_cmdline():
     """parse command line arguments"""
-    parser = ArgumentParser(
-        description="dtbTool version " + str(QCDT_VERSION))
+    parser = ArgumentParser(description=f"dtbTool version {str(QCDT_VERSION)}")
     parser.add_argument("input_dir",
                         help="Input directory")
     parser.add_argument("-o", "--output-file", type=FileType('wb'), required=True,
@@ -391,9 +386,15 @@ def write_index_table(args, chip_list, dt_version, next_dtb_offset):
                                         chip.pmic_model2,
                                         chip.pmic_model3))
 
-        # Search linked dtb in the indexed dtb list (only write a single dtb once)
-        indexed_dtb = next((item for item in dtb_ordered_list if chip.dtb_file in item.path), None)
-        if not indexed_dtb:
+        if indexed_dtb := next(
+            (item for item in dtb_ordered_list if chip.dtb_file in item.path),
+            None,
+        ):
+            # Found, point to previously indexed dtb
+            args.output_file.write(pack('I', indexed_dtb.offset))
+            args.output_file.write(pack('I', indexed_dtb.size))
+
+        else:
             # Not found, search in dtb list
             dtb = next((item for item in _dtb_list if chip.dtb_file in item.path), None)
             if not dtb:
@@ -412,11 +413,6 @@ def write_index_table(args, chip_list, dt_version, next_dtb_offset):
 
             # Add indexed dtb to the list
             dtb_ordered_list.append(dtb)
-        else:
-            # Found, point to previously indexed dtb
-            args.output_file.write(pack('I', indexed_dtb.offset))
-            args.output_file.write(pack('I', indexed_dtb.size))
-
     return dtb_ordered_list
 
 
@@ -511,8 +507,8 @@ def main():
 
     print("DTB combiner:")
 
-    print("  Input directory: %s" % args.input_dir)
-    print("  Output file: %s" % os.path.realpath(args.output_file.name))
+    print(f"  Input directory: {args.input_dir}")
+    print(f"  Output file: {os.path.realpath(args.output_file.name)}")
 
     dtb_count = find_dtb(args.input_dir, args)
 

@@ -55,14 +55,14 @@ def add_unique_dtb(dtb_list, dtb):
 def unpack_dtb(args):
     """Print header and chip infos. Extracts dtb images."""
     qcdt_magic = unpack('4s', args.dtb.read(4))
-    print('QCDT magic: %s' % qcdt_magic)
+    print(f'QCDT magic: {qcdt_magic}')
 
     header = unpack('2I', args.dtb.read(2 * 4))
     version = header[0]
     dtb_count = header[1]
 
-    print('version: %s' % version)
-    print('dtb_count: %s' % dtb_count)
+    print(f'version: {version}')
+    print(f'dtb_count: {dtb_count}')
 
     dtb_list = []
     for i in range(dtb_count):
@@ -78,18 +78,19 @@ def unpack_dtb(args):
         rev_num = unpack('I', args.dtb.read(4))
 
         if version >= 2:
-            print(' chipset: %s platform: %s subtype: %s revNum: %s' %
-                  (chipset[0], platform[0], subtype[0], rev_num[0]))
+            print(
+                f' chipset: {chipset[0]} platform: {platform[0]} subtype: {subtype[0]} revNum: {rev_num[0]}'
+            )
         else:
-            print(' chipset: %s platform: %s revNum: %s' % (chipset[0], platform[0], rev_num[0]))
+            print(f' chipset: {chipset[0]} platform: {platform[0]} revNum: {rev_num[0]}')
 
         if version >= 3:
             pmic = unpack('4I', args.dtb.read(4 * 4))
-            print(' pmic0: %s pmic1: %s pmic2: %s pmic3: %s' % (pmic[0], pmic[1], pmic[2], pmic[3]))
+            print(f' pmic0: {pmic[0]} pmic1: {pmic[1]} pmic2: {pmic[2]} pmic3: {pmic[3]}')
 
         dtb_offset = unpack('I', args.dtb.read(4))
         dtb_size = unpack('I', args.dtb.read(4))
-        print(' dtb offset: %s dtb size: %s' % (dtb_offset[0], dtb_size[0]))
+        print(f' dtb offset: {dtb_offset[0]} dtb size: {dtb_size[0]}')
 
         if not args.print_only:
             name_suff = len(dtb_list) + 1
@@ -101,7 +102,7 @@ def unpack_dtb(args):
 
     print("")
     for dtb in dtb_list:
-        print("Extracting %s..." % dtb.name)
+        print(f"Extracting {dtb.name}...")
         extract_image(dtb.offset, dtb.size, args.dtb,
                       os.path.join(args.out, dtb.name))
 
